@@ -1,0 +1,8 @@
+{
+  "name": "@ocr-demo/validators",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@ocr-demo/schemas": "*"
+  }
+}
