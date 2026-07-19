@@ -1,0 +1,19 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Extraction {
+  id                String   @id @default(uuid())
+  documentType      String   // "ktp" | "stnk"
+  rawOcrText        String   // audit: apa yang PaddleOCR baca
+  extractedData     String   // JSON stringified, structured hasil LLM
+  validationResult  String   // JSON stringified, warnings + confidence
+  status            String   // "auto_approved" | "needs_review" | "rejected"
+  keyIdentifier     String   // NIK untuk KTP, plat untuk STNK (untuk display di history)
+  createdAt         DateTime @default(now())
+}
