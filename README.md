@@ -1,87 +1,124 @@
-# OCR Web App KTP & STNK
+# AI Document Scanner (KTP & STNK)
 
-Demo Web App OCR untuk **PT Sompo Insurance Indonesia** (disesuaikan menjadi *demo* environment).
-Sistem ini memproses dokumen identitas (KTP) dan kendaraan (STNK) menggunakan pendekatan **layered validation** untuk mencegah halusinasi LLM (Hallucination Rate Rendah).
+An intelligent document processing system built for secure and highly accurate Optical Character Recognition (OCR) and data extraction. This system is designed for modern enterprise environments, featuring a Next.js frontend/backend-for-frontend and an isolated Python OCR microservice. 
 
-## Arsitektur
+## System Architecture
 
-Pipeline sistem berjalan sebagai berikut:
-1. **PaddleOCR**: Sebagai OCR deterministik yang membaca gambar menjadi teks flat. Gambar tidak pernah dikirim ke LLM.
-2. **Gemini 2.0 Flash**: Berfungsi murni sebagai **Structuring Engine**. Gemini hanya menerima teks dari PaddleOCR dan merubahnya ke JSON terstruktur (tidak menerawang data dari gambar).
-3. **Validator**: Layer validasi menggunakan NIK decoder dan Regex (STNK) untuk mendeteksi anomali hasil ekstraksi, yang menghasilkan status `auto_approved`, `needs_review`, atau `rejected`.
-4. **Prisma & SQLite**: Menyimpan hasil ekstraksi tanpa menyimpan gambar (PII compliance).
+The project is structured as a monorepo consisting of two primary services:
+1. **Web App (apps/web)**: Next.js application handling the user interface, database interactions (Prisma), LLM-based validation (Groq), and API routing.
+2. **OCR Service (apps/ocr-service)**: Python FastAPI microservice utilizing PaddleOCR for high-precision text extraction.
 
----
+## Prerequisites
 
-## Prasyarat
-- Node.js >= 18
-- Python >= 3.9
-- Docker (opsional untuk menjalankan ocr-service via container)
+Ensure the following dependencies are installed on your local machine:
+- Node.js (v18.x or higher)
+- Python (v3.10 or higher)
+- npm or yarn
 
-## Cara Menjalankan (Local Development)
+## Environment Setup
 
-### 1. Setup Backend OCR (Python FastAPI)
+### 1. Web App Environment Configuration
+Navigate to the web app directory and create the environment configuration file:
+```bash
+cd apps/web
+copy .env.example .env
+```
 
-Masuk ke folder `apps/ocr-service` dan install dependensi:
+Define the following required variables in `apps/web/.env`:
+```env
+# Database Configuration (SQLite for local development)
+DATABASE_URL="file:./dev.db"
+
+# LLM Provider Configuration (Groq)
+GROQ_API_KEY="your_groq_api_key_here"
+GROQ_MODEL="llama-3.3-70b-versatile"
+
+# OCR Microservice Connection
+OCR_SERVICE_URL="http://127.0.0.1:8000"
+```
+
+## Installation & Setup
+
+### 1. OCR Service Setup (Python Backend)
+Initialize and start the Python OCR microservice. It is recommended to use a virtual environment.
 
 ```bash
 cd apps/ocr-service
-python -m venv venv
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-pip install -r requirements.txt
-```
 
-Jalankan FastAPI service:
-```bash
+# Create and activate virtual environment (Windows)
+python -m venv venv
+.\venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the OCR service
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
-> Service ini akan berjalan di `http://localhost:8000`. Saat pertama kali jalan, PaddleOCR akan mendownload model-nya.
+The OCR service will run locally at `http://127.0.0.1:8000`.
 
-### 2. Setup Frontend Next.js
+### 2. Web App Setup (Next.js Frontend & API)
+Open a new terminal session, initialize the Next.js application, and setup the database.
 
-Masuk ke folder proyek root dan instal dependensi npm (ini monorepo):
-```bash
-npm install
-```
-
-Di `apps/web/.env`, atur API Key untuk Gemini:
-```env
-GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-OCR_SERVICE_URL="http://localhost:8000"
-DATABASE_URL="file:./dev.db"
-```
-
-Inisialisasi Database (SQLite) dari root:
 ```bash
 cd apps/web
+
+# Install Node dependencies
+npm install
+
+# Push database schema to SQLite
 npx prisma db push
+
+# Generate Prisma Client
 npx prisma generate
 ```
 
-Jalankan frontend:
+## Running the Application
+
+### Development Environment
+To run the full application in development mode, ensure both services are running simultaneously in separate terminal instances.
+
+Terminal 1 (OCR Service):
 ```bash
+cd apps/ocr-service
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Terminal 2 (Web App):
+```bash
+cd apps/web
 npm run dev
 ```
-> Buka browser dan pergi ke `http://localhost:3000`.
+The web interface will be accessible at `http://localhost:3000`.
 
----
+### Database Management (Prisma Studio)
+To inspect, query, and manage your local SQLite database records, utilize Prisma Studio.
 
-## Demo Script (Untuk Project Manager)
+```bash
+cd apps/web
+npx prisma studio
+```
+Prisma Studio will launch a local database GUI, accessible at `http://localhost:5555`.
 
-1. Buka `http://localhost:3000`.
-2. Klik **Verifikasi KTP**.
-3. Upload gambar KTP yang bersih. Tunjukkan bagaimana OCR dan Gemini mampu mengekstrak data 100% dan Validator memberikan status *Auto Approved* (Hijau).
-4. Upload gambar KTP yang buram/blur, atau NIK-nya salah. Tunjukkan bagaimana Validator mendeteksi ketidaksesuaian (Misal: Tanggal lahir OCR tidak cocok dengan decoded NIK) dan memberikan flag *Needs Review* (Kuning/Warning).
-5. Jelaskan bahwa **LLM tidak berhalusinasi** karena tidak melihat gambar. Ia mematuhi instruksi deterministik (Temperature = 0).
-6. Demo bagian **STNK** dengan cara serupa. Tunjukkan pelat nomor dan validasi VIN (tanpa I,O,Q).
-7. Klik tombol **Riwayat Ekstraksi** di ujung kanan atas dan tunjukkan log audit (tanpa gambar) untuk mematuhi regulasi Data Pribadi.
+### Production Deployment Guidelines
 
----
+When deploying to a production environment, adhere to the following best practices:
 
-## Struktur Folder Monorepo
+1. **Database Strategy**: Replace SQLite with a robust relational database (e.g., PostgreSQL, MySQL) by modifying the `DATABASE_URL` and updating the database provider in `schema.prisma`.
+2. **Build Web App**:
+   ```bash
+   cd apps/web
+   npm run build
+   npm start
+   ```
+3. **Containerization (OCR Service)**: Deploy the OCR service using the provided Dockerfile.
+   ```bash
+   cd apps/ocr-service
+   docker build -t ocr-service .
+   docker run -p 8000:8000 ocr-service
+   ```
+4. **Environment Variables**: Ensure all production secrets and API keys are securely injected via your hosting provider's environment management system.
+5. **Security**: Ensure the OCR service endpoint (`OCR_SERVICE_URL`) is secured and not publicly exposed, routing requests only from the internal Next.js API layer.
 
-- `apps/web`: Next.js 14 frontend.
-- `apps/ocr-service`: FastAPI & PaddleOCR backend.
-- `packages/schemas`: Zod schemas yang dibagikan.
-- `packages/validators`: NIK decoder & KTP/STNK rules.
+## Privacy & Data Persistence
+This system is strictly designed with PII (Personally Identifiable Information) compliance in mind. Uploaded ID card images (KTP/STNK) are kept in memory during processing and are immediately discarded. No images are written to the disk or stored in the database. Only the structured, extracted text data is logged in the database for history tracking purposes.
